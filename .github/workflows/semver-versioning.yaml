@@ -1,0 +1,68 @@
+name: Determine Version
+
+on:
+  workflow_call:
+    inputs:
+      version-type:
+        description: "Version type (major, minor, patch)"
+        required: false
+        type: string
+        default: "patch"
+    outputs:
+      version:
+        description: "The new semantic version (e.g., v1.2.5)"
+        value: ${{ jobs.version.outputs.new_version }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full Git history for tagging
+
+      - name: Determine Version
+        id: version
+        run: |
+          # Get the current version (if exists) or start with v0.0.0
+          CURRENT_VERSION=$(git tag --list 'v*' --sort=-version:refname | head -n 1 | sed 's/^v//')
+          if [ -z "$CURRENT_VERSION" ]; then
+            CURRENT_VERSION="0.0.0"
+          fi
+
+          # Split version into major, minor, patch
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+
+          # Increment based on input or default to patch
+          VERSION_TYPE=${{ inputs.version-type }}
+          case $VERSION_TYPE in
+            "major")
+              new_major=$((major + 1))
+              new_version="v${new_major}.0.0"
+              ;;
+            "minor")
+              new_minor=$((minor + 1))
+              new_version="v${major}.${new_minor}.0"
+              ;;
+            "patch")
+              new_patch=$((patch + 1))
+              new_version="v${major}.${minor}.${new_patch}"
+              ;;
+            *)
+              echo "Invalid version type. Using patch as default."
+              new_patch=$((patch + 1))
+              new_version="v${major}.${minor}.${new_patch}"
+              ;;
+          esac
+
+          echo "version=${new_version}" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag
+        run: |
+          git tag "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }} # Use PAT for Git pushes
