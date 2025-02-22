@@ -8,6 +8,10 @@ on:
         required: false
         type: string
         default: "patch"
+      ghcr-token:
+        description: "GitHub Container Registry PAT for Git tagging"
+        required: false
+        type: string
     outputs:
       version:
         description: "The new semantic version (e.g., v1.2.5)"
@@ -61,8 +65,9 @@ jobs:
           echo "version=${new_version}" >> $GITHUB_OUTPUT
 
       - name: Create Git Tag
+        if: inputs.ghcr-token != '' # Only run if token is provided
         run: |
           git tag "${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.version }}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }} # Use PAT for Git pushes
+          GITHUB_TOKEN: ${{ inputs.ghcr-token }} # Use the passed token for Git pushes
